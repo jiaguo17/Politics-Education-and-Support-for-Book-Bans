@@ -1,0 +1,1076 @@
+# load the csv files
+GSS2021 <- read.csv("~/Desktop/GSS2021.csv")
+
+# load library for replacing special characters into NA
+library(naniar)
+# load library for making plots
+library(ggplot2)
+# load library for using survey
+library(survey)
+# load libraries for producing formatted tables
+library(sjPlot)
+library(sjmisc)
+library(sjlabelled)
+library(knitr)
+# load library for using color palette
+library(viridis)
+# load library for combining multiple plots into one grid
+library(cowplot)
+
+# create a subset for libhomo and libhomoy
+GSS2021_libhomo <- GSS2021[, c("libhomo", "libhomoy", "sex", "hispanic", "race", "degree", "age", "polviews", "relig", "vpsu", "wtssnrps", "vstrat")]
+
+# create a variable libhomo_all to combine libhomo and libhomoy
+GSS2021_libhomo$libhomo_all <- ifelse(GSS2021_libhomo$libhomo == "remove" | GSS2021_libhomo$libhomoy == "remove", 1, ifelse(GSS2021_libhomo$libhomo == "not remove" | GSS2021_libhomo$libhomoy == "not remove", 0, NA))
+
+# create a source variable libhomo_source
+GSS2021_libhomo$libhomo_source <- ifelse(GSS2021_libhomo$libhomo == "remove" | GSS2021_libhomo$libhomo == "not remove", "libhomo", ifelse(GSS2021_libhomo$libhomoy == "remove" | GSS2021_libhomo$libhomoy == "not remove", "libhomoy", NA))
+
+# only keep the rows that has been applied with questions about libhomo or libhomoy with no missing values
+GSS2021_libhomo <- subset(GSS2021_libhomo, libhomo_source == "libhomo" | libhomo_source == "libhomoy")
+
+# keep the rows of interest
+GSS2021_libhomo <- GSS2021_libhomo[, c("sex", "hispanic", "race", "degree", "age", "polviews", "relig", "vpsu", "wtssnrps", "vstrat", "libhomo_all", "libhomo_source")]
+
+# replace "no answer" with NA
+GSS2021_libhomo <- GSS2021_libhomo %>%
+  replace_with_na_all(condition = ~.x == "no answer")
+
+# replace "iap" with NA
+GSS2021_libhomo <- GSS2021_libhomo %>%
+  replace_with_na_all(condition = ~.x == "iap")
+
+# replace "skipped on web" with NA
+GSS2021_libhomo <- GSS2021_libhomo %>%
+  replace_with_na_all(condition = ~.x == "skipped on web")
+
+# replace "don't know" with NA
+GSS2021_libhomo <- GSS2021_libhomo %>%
+  replace_with_na_all(condition = ~.x == "don't know")
+
+# replace "refused" with NA
+GSS2021_libhomo <- GSS2021_libhomo %>%
+  replace_with_na_all(condition = ~.x == "refused")
+
+# replace "can't choose" with NA
+GSS2021_libhomo <- GSS2021_libhomo %>%
+  replace_with_na_all(condition = ~.x == "can't choose")
+
+# only keep the rows that have complete information
+GSS2021_libhomo <- na.omit(GSS2021_libhomo)
+
+# create a version variable based on the source variable
+GSS2021_libhomo$version <- ifelse(GSS2021_libhomo$libhomo_source == "libhomo", 1, 0)
+
+# recode hispanic variable to a binary variable
+GSS2021_libhomo$hispanic[GSS2021_libhomo$hispanic != "not hispanic"] <- "hispanic"
+
+# recode race variable to use white as reference category
+GSS2021_libhomo$race <- as.factor(GSS2021_libhomo$race)
+GSS2021_libhomo$race <- relevel(GSS2021_libhomo$race, ref = "white")
+
+# recode degree variable (combining high school and associate as high school or associate, and use it as reference category)
+GSS2021_libhomo$degree[GSS2021_libhomo$degree == "associate/junior college"] <- "high school or associate"
+GSS2021_libhomo$degree[GSS2021_libhomo$degree == "high school"] <- "high school or associate"
+GSS2021_libhomo$degree <- as.factor(GSS2021_libhomo$degree)
+# reorder categories
+GSS2021_libhomo$degree <- factor(GSS2021_libhomo$degree, levels = c("less than high school", "high school or associate", "bachelor's", "graduate"))
+GSS2021_libhomo$degree <- relevel(GSS2021_libhomo$degree, ref = "high school or associate")
+
+# regroup age variable by decades
+GSS2021_libhomo$age[GSS2021_libhomo$age == "89 or older"] <- "89"
+GSS2021_libhomo$age <- as.numeric(GSS2021_libhomo$age)
+GSS2021_libhomo$age[GSS2021_libhomo$age >= 18 & GSS2021_libhomo$age < 28] <- "18-27"
+GSS2021_libhomo$age[GSS2021_libhomo$age >= 28 & GSS2021_libhomo$age < 38] <- "28-37"
+GSS2021_libhomo$age[GSS2021_libhomo$age >= 38 & GSS2021_libhomo$age < 48] <- "38-47"
+GSS2021_libhomo$age[GSS2021_libhomo$age >= 48 & GSS2021_libhomo$age < 58] <- "48-57"
+GSS2021_libhomo$age[GSS2021_libhomo$age >= 58 & GSS2021_libhomo$age < 68] <- "58-67"
+GSS2021_libhomo$age[GSS2021_libhomo$age >= 68 & GSS2021_libhomo$age < 78] <- "68-77"
+GSS2021_libhomo$age[GSS2021_libhomo$age >= 78] <- "78 and above"
+
+# recode political views variable to three categories (liberal, moderate, and conservative) (use moderate as reference category)
+GSS2021_libhomo$polviews[GSS2021_libhomo$polviews == "extremely liberal" | GSS2021_libhomo$polviews == "liberal" | GSS2021_libhomo$polviews == "slightly liberal"] <- "liberal"
+GSS2021_libhomo$polviews[GSS2021_libhomo$polviews == "moderate, middle of the road"] <- "moderate"
+GSS2021_libhomo$polviews[GSS2021_libhomo$polviews == "slightly conservative" | GSS2021_libhomo$polviews == "conservative" | GSS2021_libhomo$polviews == "extremely conservative"] <- "conservative"
+GSS2021_libhomo$polviews <- as.factor(GSS2021_libhomo$polviews)
+GSS2021_libhomo$polviews <- relevel(GSS2021_libhomo$polviews, ref = "moderate")
+
+# recode religion variable to five categories (Protestants, Catholics, Jewish people, Those with no religious affiliation, Those with other religious affiliations) (use no religious affiliation as reference category)
+GSS2021_libhomo$relig[GSS2021_libhomo$relig == "protestant"] <- "Protestants"
+GSS2021_libhomo$relig[GSS2021_libhomo$relig == "catholic"] <- "Catholics"
+GSS2021_libhomo$relig[GSS2021_libhomo$relig == "jewish"] <- "Jewish people"
+GSS2021_libhomo$relig[GSS2021_libhomo$relig == "none"] <- "Those with no religious affiliation"
+GSS2021_libhomo$relig[GSS2021_libhomo$relig == "other"] <- "Those with other religious affiliations"
+GSS2021_libhomo$relig[GSS2021_libhomo$relig == "buddhism"] <- "Those with other religious affiliations"
+GSS2021_libhomo$relig[GSS2021_libhomo$relig == "hinduism"] <- "Those with other religious affiliations"
+GSS2021_libhomo$relig[GSS2021_libhomo$relig == "other eastern religions"] <- "Those with other religious affiliations"
+GSS2021_libhomo$relig[GSS2021_libhomo$relig == "muslim/islam"] <- "Those with other religious affiliations"
+GSS2021_libhomo$relig[GSS2021_libhomo$relig == "orthodox-christian"] <- "Those with other religious affiliations"
+GSS2021_libhomo$relig[GSS2021_libhomo$relig == "christian"] <- "Those with other religious affiliations"
+GSS2021_libhomo$relig[GSS2021_libhomo$relig == "native american"] <- "Those with other religious affiliations"
+GSS2021_libhomo$relig[GSS2021_libhomo$relig == "inter-nondenominational"] <- "Those with other religious affiliations"
+GSS2021_libhomo$relig <- as.factor(GSS2021_libhomo$relig)
+GSS2021_libhomo$relig <- relevel(GSS2021_libhomo$relig, ref = "Those with no religious affiliation")
+
+# use survey design for libhomo and libhomoy
+libhomo_design <- svydesign(ids = ~ vpsu, weights = ~ wtssnrps, strata = ~ vstrat, data = GSS2021_libhomo)
+
+# find the weighted proportion that supports censorship
+libhomo_wp <- svytotal(GSS2021_libhomo$libhomo_all, design = libhomo_design)
+libhomo_numob <- nrow(GSS2021_libhomo)
+libhomo_wpt <- as.data.frame(round((libhomo_wp / libhomo_numob), 3) * 100)
+# add a source variable to distinguish between data frames
+libhomo_wpt[, "source"] <- "libhomo_wp"
+# keep the weighted proportion that supports censorship and source variable
+libhomo_wpt <- libhomo_wpt[, -2]
+# display the weighted proportion that supports censorship
+knitr::kable(libhomo_wpt, format = "markdown")
+
+# build a model for libhomo and libhomoy with survey weights
+model_libhomo <- svyglm(libhomo_all ~ version + sex + hispanic + race + degree + age + polviews + relig, family = quasibinomial, design = libhomo_design)
+summary(model_libhomo)
+
+# produce formatted table
+tab_model(model_libhomo, pred.labels = c("Intercept", "Version", "Male", "Not Hispanic", "Black", "Other", "Less than high school", "Bachelor's", "Graduate", "Age 28-37", "Age 38-47", "Age 48-57", "Age 58-67", "Age 68-77", "Age 78 and above", "Political conservative", "Political liberal", "Catholics", "Jewish people", "Protestants", "Other religious affiliations"), string.ci = "CI (95%)", string.p = "P-Value")
+
+# find the mode for variable sex
+freq_libhomo_sex <- table(GSS2021_libhomo$sex)
+mode_libhomo_sex <- names(which.max(freq_libhomo_sex))
+
+# find the mode for variable hispanic
+freq_libhomo_hispanic <- table(GSS2021_libhomo$hispanic)
+mode_libhomo_hispanic <- names(which.max(freq_libhomo_hispanic))
+
+# find the mode for variable race
+freq_libhomo_race <- table(GSS2021_libhomo$race)
+mode_libhomo_race <- names(which.max(freq_libhomo_race))
+
+# find the mode for variable age
+freq_libhomo_age <- table(GSS2021_libhomo$age)
+mode_libhomo_age <- names(which.max(freq_libhomo_age))
+
+# find the mode for variable relig
+freq_libhomo_relig <- table(GSS2021_libhomo$relig)
+mode_libhomo_relig <- names(which.max(freq_libhomo_relig))
+
+# find the mode for variable version
+freq_libhomo_version <- table(GSS2021_libhomo$version)
+mode_libhomo_version <- names(which.max(freq_libhomo_version))
+
+# find predicted probabilities for the interaction between education and politics using mode of the variables
+GSS2021_libhomo_predict <- with(GSS2021_libhomo, data.frame(sex = mode_libhomo_sex, hispanic = mode_libhomo_hispanic, race = mode_libhomo_race, degree = c(rep("less than high school", 3), rep("high school or associate", 3), rep("bachelor's", 3), rep("graduate", 3)), age = mode_libhomo_age, polviews = rep(c("liberal", "moderate", "conservative"), 4), relig = mode_libhomo_relig, version = mode_libhomo_version))
+GSS2021_libhomo_predict$version <- as.numeric(GSS2021_libhomo_predict$version)
+GSS2021_libhomo_predict$predictpro <- predict(object = model_libhomo, newdata = GSS2021_libhomo_predict, type = "response")
+
+# only keep the rows of interest to produce barplot
+GSS2021_libhomo_predict_small <- GSS2021_libhomo_predict[, c("degree", "polviews", "predictpro")]
+
+# use shorter names for categories in degree
+GSS2021_libhomo_predict_small$degree[GSS2021_libhomo_predict_small$degree == "less than high school"] <- "<HS"
+GSS2021_libhomo_predict_small$degree[GSS2021_libhomo_predict_small$degree == "high school or associate"] <- "HS or Assoc"
+GSS2021_libhomo_predict_small$degree[GSS2021_libhomo_predict_small$degree == "bachelor's"] <- "BA"
+GSS2021_libhomo_predict_small$degree[GSS2021_libhomo_predict_small$degree == "graduate"] <- "Grad+"
+
+# reorder the categories for education and politics
+degree_order <- c("<HS", "HS or Assoc", "BA", "Grad+")
+polviews_order <- c("conservative", "moderate", "liberal")
+GSS2021_libhomo_predict_small$degree <- factor(GSS2021_libhomo_predict_small$degree, levels = degree_order)
+GSS2021_libhomo_predict_small$polviews <- factor(GSS2021_libhomo_predict_small$polviews, levels = polviews_order)
+GSS2021_libhomo_predict_small <- GSS2021_libhomo_predict_small[order(GSS2021_libhomo_predict_small$degree, GSS2021_libhomo_predict_small$polviews), ]
+# change the type for the variable predicted probability
+GSS2021_libhomo_predict_small$predictpro <- as.numeric(GSS2021_libhomo_predict_small$predictpro)
+
+# display the predicted probabilities
+knitr::kable(GSS2021_libhomo_predict_small, format = "markdown")
+
+# make barplot
+GSS2021_libhomo_bar <- ggplot(GSS2021_libhomo_predict_small, aes(x = degree, y = predictpro, fill = polviews)) + geom_bar(stat = "identity", position = "dodge") + scale_fill_viridis_d() + scale_y_continuous(limits = c(0, 0.7)) + labs(title = "Gay or Homosexual", x = NULL, y = NULL, fill = "Political Views") + theme(plot.title = element_text(size = 10), plot.margin = unit(c(2, 2, 2, 5), "mm"))
+
+# display the barplot
+print(GSS2021_libhomo_bar)
+
+# create a subset for librac and libracy
+GSS2021_librac <- GSS2021[, c("librac", "libracy", "sex", "hispanic", "race", "degree", "age", "polviews", "relig", "vpsu", "wtssnrps", "vstrat")]
+
+# create a variable librac_all to combine librac and libracy
+GSS2021_librac$librac_all <- ifelse(GSS2021_librac$librac == "remove" | GSS2021_librac$libracy == "remove", 1, ifelse(GSS2021_librac$librac == "not remove" | GSS2021_librac$libracy == "not remove", 0, NA))
+
+# create a source variable librac_source
+GSS2021_librac$librac_source <- ifelse(GSS2021_librac$librac == "remove" | GSS2021_librac$librac == "not remove", "librac", ifelse(GSS2021_librac$libracy == "remove" | GSS2021_librac$libracy == "not remove", "libracy", NA))
+
+# only keep the rows that has been applied with questions about librac or libracy with no missing values
+GSS2021_librac <- subset(GSS2021_librac, librac_source == "librac" | librac_source == "libracy")
+
+# keep the rows of interest
+GSS2021_librac <- GSS2021_librac[, c("sex", "hispanic", "race", "degree", "age", "polviews", "relig", "vpsu", "wtssnrps", "vstrat", "librac_all", "librac_source")]
+
+# replace "no answer" with NA
+GSS2021_librac <- GSS2021_librac %>%
+  replace_with_na_all(condition = ~.x == "no answer")
+
+# replace "iap" with NA
+GSS2021_librac <- GSS2021_librac %>%
+  replace_with_na_all(condition = ~.x == "iap")
+
+# replace "skipped on web" with NA
+GSS2021_librac <- GSS2021_librac %>%
+  replace_with_na_all(condition = ~.x == "skipped on web")
+
+# replace "don't know" with NA
+GSS2021_librac <- GSS2021_librac %>%
+  replace_with_na_all(condition = ~.x == "don't know")
+
+# replace "refused" with NA
+GSS2021_librac <- GSS2021_librac %>%
+  replace_with_na_all(condition = ~.x == "refused")
+
+# replace "can't choose" with NA
+GSS2021_librac <- GSS2021_librac %>%
+  replace_with_na_all(condition = ~.x == "can't choose")
+
+# only keep the rows that have complete information
+GSS2021_librac <- na.omit(GSS2021_librac)
+
+# create a version variable based on the source variable
+GSS2021_librac$version <- ifelse(GSS2021_librac$librac_source == "librac", 1, 0)
+
+# recode hispanic variable to a binary variable
+GSS2021_librac$hispanic[GSS2021_librac$hispanic != "not hispanic"] <- "hispanic"
+
+# recode race variable to use white as reference category
+GSS2021_librac$race <- as.factor(GSS2021_librac$race)
+GSS2021_librac$race <- relevel(GSS2021_librac$race, ref = "white")
+
+# recode degree variable (combining high school and associate as high school or associate, and use it as reference category)
+GSS2021_librac$degree[GSS2021_librac$degree == "associate/junior college"] <- "high school or associate"
+GSS2021_librac$degree[GSS2021_librac$degree == "high school"] <- "high school or associate"
+GSS2021_librac$degree <- as.factor(GSS2021_librac$degree)
+# reorder categories
+GSS2021_librac$degree <- factor(GSS2021_librac$degree, levels = c("less than high school", "high school or associate", "bachelor's", "graduate"))
+GSS2021_librac$degree <- relevel(GSS2021_librac$degree , ref = "high school or associate")
+
+# regroup age variable by decades
+GSS2021_librac$age[GSS2021_librac$age == "89 or older"] <- "89"
+GSS2021_librac$age <- as.numeric(GSS2021_librac$age)
+GSS2021_librac$age[GSS2021_librac$age >= 18 & GSS2021_librac$age < 28] <- "18-27"
+GSS2021_librac$age[GSS2021_librac$age >= 28 & GSS2021_librac$age < 38] <- "28-37"
+GSS2021_librac$age[GSS2021_librac$age >= 38 & GSS2021_librac$age < 48] <- "38-47"
+GSS2021_librac$age[GSS2021_librac$age >= 48 & GSS2021_librac$age < 58] <- "48-57"
+GSS2021_librac$age[GSS2021_librac$age >= 58 & GSS2021_librac$age < 68] <- "58-67"
+GSS2021_librac$age[GSS2021_librac$age >= 68 & GSS2021_librac$age < 78] <- "68-77"
+GSS2021_librac$age[GSS2021_librac$age >= 78] <- "78 and above"
+
+# recode political views variable to three categories (liberal, moderate, and conservative) (use moderate as reference category)
+GSS2021_librac$polviews[GSS2021_librac$polviews == "extremely liberal" | GSS2021_librac$polviews == "liberal" | GSS2021_librac$polviews == "slightly liberal"] <- "liberal"
+GSS2021_librac$polviews[GSS2021_librac$polviews == "moderate, middle of the road"] <- "moderate"
+GSS2021_librac$polviews[GSS2021_librac$polviews == "slightly conservative" | GSS2021_librac$polviews == "conservative" | GSS2021_librac$polviews == "extremely conservative"] <- "conservative"
+GSS2021_librac$polviews <- as.factor(GSS2021_librac$polviews)
+GSS2021_librac$polviews <- relevel(GSS2021_librac$polviews, ref = "moderate")
+
+# recode religion variable to five categories (Protestants, Catholics, Jewish people, Those with no religious affiliation, Those with other religious affiliations) (use no religious affiliation as reference category)
+GSS2021_librac$relig[GSS2021_librac$relig == "protestant"] <- "Protestants"
+GSS2021_librac$relig[GSS2021_librac$relig == "catholic"] <- "Catholics"
+GSS2021_librac$relig[GSS2021_librac$relig == "jewish"] <- "Jewish people"
+GSS2021_librac$relig[GSS2021_librac$relig == "none"] <- "Those with no religious affiliation"
+GSS2021_librac$relig[GSS2021_librac$relig == "other"] <- "Those with other religious affiliations"
+GSS2021_librac$relig[GSS2021_librac$relig == "buddhism"] <- "Those with other religious affiliations"
+GSS2021_librac$relig[GSS2021_librac$relig == "hinduism"] <- "Those with other religious affiliations"
+GSS2021_librac$relig[GSS2021_librac$relig == "other eastern religions"] <- "Those with other religious affiliations"
+GSS2021_librac$relig[GSS2021_librac$relig == "muslim/islam"] <- "Those with other religious affiliations"
+GSS2021_librac$relig[GSS2021_librac$relig == "orthodox-christian"] <- "Those with other religious affiliations"
+GSS2021_librac$relig[GSS2021_librac$relig == "christian"] <- "Those with other religious affiliations"
+GSS2021_librac$relig[GSS2021_librac$relig == "native american"] <- "Those with other religious affiliations"
+GSS2021_librac$relig[GSS2021_librac$relig == "inter-nondenominational"] <- "Those with other religious affiliations"
+GSS2021_librac$relig <- as.factor(GSS2021_librac$relig)
+GSS2021_librac$relig <- relevel(GSS2021_librac$relig, ref = "Those with no religious affiliation")
+
+# use survey design for librac and libracy
+librac_design <- svydesign(ids = ~ vpsu, weights = ~ wtssnrps, strata = ~ vstrat, data = GSS2021_librac)
+
+# find the weighted proportion that supports censorship
+librac_wp <- svytotal(GSS2021_librac$librac_all, design = librac_design)
+librac_numob <- nrow(GSS2021_librac)
+librac_wpt <- as.data.frame(round((librac_wp / librac_numob), 3) * 100)
+# add a source variable to distinguish between data frames
+librac_wpt[, "source"] <- "librac_wp"
+# keep the weighted proportion that supports censorship and source variable
+librac_wpt <- librac_wpt[, -2]
+# display the weighted proportion that supports censorship
+knitr::kable(librac_wpt, format = "markdown")
+
+# build a model for librac and libracy with survey weights
+model_librac <- svyglm(librac_all ~ version + sex + hispanic + race + degree + age + polviews + relig, family = quasibinomial, design = librac_design)
+summary(model_librac)
+
+# produce formatted table
+tab_model(model_librac, pred.labels = c("Intercept", "Version", "Male", "Not Hispanic", "Black", "Other", "Less than high school", "Bachelor's", "Graduate", "Age 28-37", "Age 38-47", "Age 48-57", "Age 58-67", "Age 68-77", "Age 78 and above", "Political conservative", "Political liberal", "Catholics", "Jewish people", "Protestants", "Other religious affiliations"), string.ci = "CI (95%)", string.p = "P-Value")
+
+# find the mode for variable sex
+freq_librac_sex <- table(GSS2021_librac$sex)
+mode_librac_sex <- names(which.max(freq_librac_sex))
+
+# find the mode for variable hispanic
+freq_librac_hispanic <- table(GSS2021_librac$hispanic)
+mode_librac_hispanic <- names(which.max(freq_librac_hispanic))
+
+# find the mode for variable race
+freq_librac_race <- table(GSS2021_librac$race)
+mode_librac_race <- names(which.max(freq_librac_race))
+
+# find the mode for variable age
+freq_librac_age <- table(GSS2021_librac$age)
+mode_librac_age <- names(which.max(freq_librac_age))
+
+# find the mode for variable relig
+freq_librac_relig <- table(GSS2021_librac$relig)
+mode_librac_relig <- names(which.max(freq_librac_relig))
+
+# find the mode for variable version
+freq_librac_version <- table(GSS2021_librac$version)
+mode_librac_version <- names(which.max(freq_librac_version))
+
+# find predicted probabilities for the interaction between education and politics using mode of the variables
+GSS2021_librac_predict <- with(GSS2021_librac, data.frame(sex = mode_librac_sex, hispanic = mode_librac_hispanic, race = mode_librac_race, degree = c(rep("less than high school", 3), rep("high school or associate", 3), rep("bachelor's", 3), rep("graduate", 3)), age = mode_librac_age, polviews = rep(c("liberal", "moderate", "conservative"), 4), relig = mode_librac_relig, version = mode_librac_version))
+GSS2021_librac_predict$version <- as.numeric(GSS2021_librac_predict$version)
+GSS2021_librac_predict$predictpro <- predict(object = model_librac, newdata = GSS2021_librac_predict, type = "response")
+
+# only keep the rows of interest to produce barplot
+GSS2021_librac_predict_small <- GSS2021_librac_predict[, c("degree", "polviews", "predictpro")]
+
+# use shorter names for categories in degree
+GSS2021_librac_predict_small$degree[GSS2021_librac_predict_small$degree == "less than high school"] <- "<HS"
+GSS2021_librac_predict_small$degree[GSS2021_librac_predict_small$degree == "high school or associate"] <- "HS or Assoc"
+GSS2021_librac_predict_small$degree[GSS2021_librac_predict_small$degree == "bachelor's"] <- "BA"
+GSS2021_librac_predict_small$degree[GSS2021_librac_predict_small$degree == "graduate"] <- "Grad+"
+
+# reorder the categories for education and politics
+degree_order <- c("<HS", "HS or Assoc", "BA", "Grad+")
+polviews_order <- c("conservative", "moderate", "liberal")
+GSS2021_librac_predict_small$degree <- factor(GSS2021_librac_predict_small$degree, levels = degree_order)
+GSS2021_librac_predict_small$polviews <- factor(GSS2021_librac_predict_small$polviews, levels = polviews_order)
+GSS2021_librac_predict_small <- GSS2021_librac_predict_small[order(GSS2021_librac_predict_small$degree, GSS2021_librac_predict_small$polviews), ]
+# change the type for the variable predicted probability
+GSS2021_librac_predict_small$predictpro <- as.numeric(GSS2021_librac_predict_small$predictpro)
+
+# display the predicted probabilities
+knitr::kable(GSS2021_librac_predict_small, format = "markdown")
+
+# make barplot
+GSS2021_librac_bar <- ggplot(GSS2021_librac_predict_small, aes(x = degree, y = predictpro, fill = polviews)) + geom_bar(stat = "identity", position = "dodge") + scale_fill_viridis_d() + scale_y_continuous(limits = c(0, 0.7)) + labs(title = "Racist", x = NULL, y = NULL, fill = "Political Views") + theme(plot.title = element_text(size = 10), plot.margin = unit(c(2, 2, 2, 5), "mm"))
+
+# display the barplot
+print(GSS2021_librac_bar)
+
+# create a subset for libcom and libcomy
+GSS2021_libcom <- GSS2021[, c("libcom", "libcomy", "sex", "hispanic", "race", "degree", "age", "polviews", "relig", "vpsu", "wtssnrps", "vstrat")]
+
+# create a variable libcom_all to combine libcom and libcomy
+GSS2021_libcom$libcom_all <- ifelse(GSS2021_libcom$libcom == "remove" | GSS2021_libcom$libcomy == "remove", 1, ifelse(GSS2021_libcom$libcom == "not remove" | GSS2021_libcom$libcomy == "not remove", 0, NA))
+
+# create a source variable libcom_source
+GSS2021_libcom$libcom_source <- ifelse(GSS2021_libcom$libcom == "remove" | GSS2021_libcom$libcom == "not remove", "libcom", ifelse(GSS2021_libcom$libcomy == "remove" | GSS2021_libcom$libcomy == "not remove", "libcomy", NA))
+
+# only keep the rows that has been applied with questions about libcom or libcomy with no missing values
+GSS2021_libcom <- subset(GSS2021_libcom, libcom_source == "libcom" | libcom_source == "libcomy")
+
+# keep the rows of interest
+GSS2021_libcom <- GSS2021_libcom[, c("sex", "hispanic", "race", "degree", "age", "polviews", "relig", "vpsu", "wtssnrps", "vstrat", "libcom_all", "libcom_source")]
+
+# replace "no answer" with NA
+GSS2021_libcom <- GSS2021_libcom %>%
+  replace_with_na_all(condition = ~.x == "no answer")
+
+# replace "iap" with NA
+GSS2021_libcom <- GSS2021_libcom %>%
+  replace_with_na_all(condition = ~.x == "iap")
+
+# replace "skipped on web" with NA
+GSS2021_libcom <- GSS2021_libcom %>%
+  replace_with_na_all(condition = ~.x == "skipped on web")
+
+# replace "don't know" with NA
+GSS2021_libcom <- GSS2021_libcom %>%
+  replace_with_na_all(condition = ~.x == "don't know")
+
+# replace "refused" with NA
+GSS2021_libcom <- GSS2021_libcom %>%
+  replace_with_na_all(condition = ~.x == "refused")
+
+# replace "can't choose" with NA
+GSS2021_libcom <- GSS2021_libcom %>%
+  replace_with_na_all(condition = ~.x == "can't choose")
+
+# only keep the rows that have complete information
+GSS2021_libcom <- na.omit(GSS2021_libcom)
+
+# create a version variable based on the source variable
+GSS2021_libcom$version <- ifelse(GSS2021_libcom$libcom_source == "libcom", 1, 0)
+
+# recode hispanic variable to a binary variable
+GSS2021_libcom$hispanic[GSS2021_libcom$hispanic != "not hispanic"] <- "hispanic"
+
+# recode race variable to use white as reference category
+GSS2021_libcom$race <- as.factor(GSS2021_libcom$race)
+GSS2021_libcom$race <- relevel(GSS2021_libcom$race, ref = "white")
+
+# recode degree variable (combining high school and associate as high school or associate, and use it as reference category)
+GSS2021_libcom$degree[GSS2021_libcom$degree == "associate/junior college"] <- "high school or associate"
+GSS2021_libcom$degree[GSS2021_libcom$degree == "high school"] <- "high school or associate"
+GSS2021_libcom$degree <- as.factor(GSS2021_libcom$degree)
+# reorder categories
+GSS2021_libcom$degree <- factor(GSS2021_libcom$degree, levels = c("less than high school", "high school or associate", "bachelor's", "graduate"))
+GSS2021_libcom$degree <- relevel(GSS2021_libcom$degree , ref = "high school or associate")
+
+# regroup age variable by decades
+GSS2021_libcom$age[GSS2021_libcom$age == "89 or older"] <- "89"
+GSS2021_libcom$age <- as.numeric(GSS2021_libcom$age)
+GSS2021_libcom$age[GSS2021_libcom$age >= 18 & GSS2021_libcom$age < 28] <- "18-27"
+GSS2021_libcom$age[GSS2021_libcom$age >= 28 & GSS2021_libcom$age < 38] <- "28-37"
+GSS2021_libcom$age[GSS2021_libcom$age >= 38 & GSS2021_libcom$age < 48] <- "38-47"
+GSS2021_libcom$age[GSS2021_libcom$age >= 48 & GSS2021_libcom$age < 58] <- "48-57"
+GSS2021_libcom$age[GSS2021_libcom$age >= 58 & GSS2021_libcom$age < 68] <- "58-67"
+GSS2021_libcom$age[GSS2021_libcom$age >= 68 & GSS2021_libcom$age < 78] <- "68-77"
+GSS2021_libcom$age[GSS2021_libcom$age >= 78] <- "78 and above"
+
+# recode political views variable to three categories (liberal, moderate, and conservative) (use moderate as reference category)
+GSS2021_libcom$polviews[GSS2021_libcom$polviews == "extremely liberal" | GSS2021_libcom$polviews == "liberal" | GSS2021_libcom$polviews == "slightly liberal"] <- "liberal"
+GSS2021_libcom$polviews[GSS2021_libcom$polviews == "moderate, middle of the road"] <- "moderate"
+GSS2021_libcom$polviews[GSS2021_libcom$polviews == "slightly conservative" | GSS2021_libcom$polviews == "conservative" | GSS2021_libcom$polviews == "extremely conservative"] <- "conservative"
+GSS2021_libcom$polviews <- as.factor(GSS2021_libcom$polviews)
+GSS2021_libcom$polviews <- relevel(GSS2021_libcom$polviews, ref = "moderate")
+
+# recode religion variable to five categories (Protestants, Catholics, Jewish people, Those with no religious affiliation, Those with other religious affiliations) (use no religious affiliation as reference category)
+GSS2021_libcom$relig[GSS2021_libcom$relig == "protestant"] <- "Protestants"
+GSS2021_libcom$relig[GSS2021_libcom$relig == "catholic"] <- "Catholics"
+GSS2021_libcom$relig[GSS2021_libcom$relig == "jewish"] <- "Jewish people"
+GSS2021_libcom$relig[GSS2021_libcom$relig == "none"] <- "Those with no religious affiliation"
+GSS2021_libcom$relig[GSS2021_libcom$relig == "other"] <- "Those with other religious affiliations"
+GSS2021_libcom$relig[GSS2021_libcom$relig == "buddhism"] <- "Those with other religious affiliations"
+GSS2021_libcom$relig[GSS2021_libcom$relig == "hinduism"] <- "Those with other religious affiliations"
+GSS2021_libcom$relig[GSS2021_libcom$relig == "other eastern religions"] <- "Those with other religious affiliations"
+GSS2021_libcom$relig[GSS2021_libcom$relig == "muslim/islam"] <- "Those with other religious affiliations"
+GSS2021_libcom$relig[GSS2021_libcom$relig == "orthodox-christian"] <- "Those with other religious affiliations"
+GSS2021_libcom$relig[GSS2021_libcom$relig == "christian"] <- "Those with other religious affiliations"
+GSS2021_libcom$relig[GSS2021_libcom$relig == "native american"] <- "Those with other religious affiliations"
+GSS2021_libcom$relig[GSS2021_libcom$relig == "inter-nondenominational"] <- "Those with other religious affiliations"
+GSS2021_libcom$relig <- as.factor(GSS2021_libcom$relig)
+GSS2021_libcom$relig <- relevel(GSS2021_libcom$relig, ref = "Those with no religious affiliation")
+
+# use survey design for libcom and libcomy
+libcom_design <- svydesign(ids = ~ vpsu, weights = ~ wtssnrps, strata = ~ vstrat, data = GSS2021_libcom)
+
+# find the weighted proportion that supports censorship
+libcom_wp <- svytotal(GSS2021_libcom$libcom_all, design = libcom_design)
+libcom_numob <- nrow(GSS2021_libcom)
+libcom_wpt <- as.data.frame(round((libcom_wp / libcom_numob), 3) * 100)
+# add a source variable to distinguish between data frames
+libcom_wpt[, "source"] <- "libcom_wp"
+# keep the weighted proportion that supports censorship and source variable
+libcom_wpt <- libcom_wpt[, -2]
+# display the weighted proportion that supports censorship
+knitr::kable(libcom_wpt, format = "markdown")
+
+# build a model for libcom and libcomy with survey weights
+model_libcom <- svyglm(libcom_all ~ version + sex + hispanic + race + degree + age + polviews + relig, family = quasibinomial, design = libcom_design)
+summary(model_libcom)
+
+# produce formatted table
+tab_model(model_libcom, pred.labels = c("Intercept", "Version", "Male", "Not Hispanic", "Black", "Other", "Less than high school", "Bachelor's", "Graduate", "Age 28-37", "Age 38-47", "Age 48-57", "Age 58-67", "Age 68-77", "Age 78 and above", "Political conservative", "Political liberal", "Catholics", "Jewish people", "Protestants", "Other religious affiliations"), string.ci = "CI (95%)", string.p = "P-Value")
+
+# find the mode for variable sex
+freq_libcom_sex <- table(GSS2021_libcom$sex)
+mode_libcom_sex <- names(which.max(freq_libcom_sex))
+
+# find the mode for variable hispanic
+freq_libcom_hispanic <- table(GSS2021_libcom$hispanic)
+mode_libcom_hispanic <- names(which.max(freq_libcom_hispanic))
+
+# find the mode for variable race
+freq_libcom_race <- table(GSS2021_libcom$race)
+mode_libcom_race <- names(which.max(freq_libcom_race))
+
+# find the mode for variable age
+freq_libcom_age <- table(GSS2021_libcom$age)
+mode_libcom_age <- names(which.max(freq_libcom_age))
+
+# find the mode for variable relig
+freq_libcom_relig <- table(GSS2021_libcom$relig)
+mode_libcom_relig <- names(which.max(freq_libcom_relig))
+
+# find the mode for variable version
+freq_libcom_version <- table(GSS2021_libcom$version)
+mode_libcom_version <- names(which.max(freq_libcom_version))
+
+# find predicted probabilities for the interaction between education and politics using mode of the variables
+GSS2021_libcom_predict <- with(GSS2021_libcom, data.frame(sex = mode_libcom_sex, hispanic = mode_libcom_hispanic, race = mode_libcom_race, degree = c(rep("less than high school", 3), rep("high school or associate", 3), rep("bachelor's", 3), rep("graduate", 3)), age = mode_libcom_age, polviews = rep(c("liberal", "moderate", "conservative"), 4), relig = mode_libcom_relig, version = mode_libcom_version))
+GSS2021_libcom_predict$version <- as.numeric(GSS2021_libcom_predict$version)
+GSS2021_libcom_predict$predictpro <- predict(object = model_libcom, newdata = GSS2021_libcom_predict, type = "response")
+
+# only keep the rows of interest to produce barplot
+GSS2021_libcom_predict_small <- GSS2021_libcom_predict[, c("degree", "polviews", "predictpro")]
+
+# use shorter names for categories in degree
+GSS2021_libcom_predict_small$degree[GSS2021_libcom_predict_small$degree == "less than high school"] <- "<HS"
+GSS2021_libcom_predict_small$degree[GSS2021_libcom_predict_small$degree == "high school or associate"] <- "HS or Assoc"
+GSS2021_libcom_predict_small$degree[GSS2021_libcom_predict_small$degree == "bachelor's"] <- "BA"
+GSS2021_libcom_predict_small$degree[GSS2021_libcom_predict_small$degree == "graduate"] <- "Grad+"
+
+# reorder the categories for education and politics
+degree_order <- c("<HS", "HS or Assoc", "BA", "Grad+")
+polviews_order <- c("conservative", "moderate", "liberal")
+GSS2021_libcom_predict_small$degree <- factor(GSS2021_libcom_predict_small$degree, levels = degree_order)
+GSS2021_libcom_predict_small$polviews <- factor(GSS2021_libcom_predict_small$polviews, levels = polviews_order)
+GSS2021_libcom_predict_small <- GSS2021_libcom_predict_small[order(GSS2021_libcom_predict_small$degree, GSS2021_libcom_predict_small$polviews), ]
+# change the type for the variable predicted probability
+GSS2021_libcom_predict_small$predictpro <- as.numeric(GSS2021_libcom_predict_small$predictpro)
+
+# display the predicted probabilities
+knitr::kable(GSS2021_libcom_predict_small, format = "markdown")
+
+# make barplot                                                 
+GSS2021_libcom_bar <- ggplot(GSS2021_libcom_predict_small, aes(x = degree, y = predictpro, fill = polviews)) + geom_bar(stat = "identity", position = "dodge") + scale_fill_viridis_d() + scale_y_continuous(limits = c(0, 0.7)) + labs(title = "Communist", x = NULL, y = NULL, fill = "Political Views") + theme(plot.title = element_text(size = 10), plot.margin = unit(c(2, 2, 2, 5), "mm"))
+
+# display the barplot
+print(GSS2021_libcom_bar)
+
+# create a subset for libmslm and libmslmy
+GSS2021_libmslm <- GSS2021[, c("libmslm", "libmslmy", "sex", "hispanic", "race", "degree", "age", "polviews", "relig", "vpsu", "wtssnrps", "vstrat")]
+
+# create a variable libmslm_all to combine libmslm and libmslmy
+GSS2021_libmslm$libmslm_all <- ifelse(GSS2021_libmslm$libmslm == "remove" | GSS2021_libmslm$libmslmy == "remove", 1, ifelse(GSS2021_libmslm$libmslm == "not remove" | GSS2021_libmslm$libmslmy == "not remove", 0, NA))
+
+# create a source variable libmslm_source
+GSS2021_libmslm$libmslm_source <- ifelse(GSS2021_libmslm$libmslm == "remove" | GSS2021_libmslm$libmslm == "not remove", "libmslm", ifelse(GSS2021_libmslm$libmslmy == "remove" | GSS2021_libmslm$libmslmy == "not remove", "libmslmy", NA))
+
+# only keep the rows that has been applied with questions about libmslm or libmslmy with no missing values
+GSS2021_libmslm <- subset(GSS2021_libmslm, libmslm_source == "libmslm" | libmslm_source == "libmslmy")
+
+# keep the rows of interest
+GSS2021_libmslm <- GSS2021_libmslm[, c("sex", "hispanic", "race", "degree", "age", "polviews", "relig", "vpsu", "wtssnrps", "vstrat", "libmslm_all", "libmslm_source")]
+
+# replace "no answer" with NA
+GSS2021_libmslm <- GSS2021_libmslm %>%
+  replace_with_na_all(condition = ~.x == "no answer")
+
+# replace "iap" with NA
+GSS2021_libmslm <- GSS2021_libmslm %>%
+  replace_with_na_all(condition = ~.x == "iap")
+
+# replace "skipped on web" with NA
+GSS2021_libmslm <- GSS2021_libmslm %>%
+  replace_with_na_all(condition = ~.x == "skipped on web")
+
+# replace "don't know" with NA
+GSS2021_libmslm <- GSS2021_libmslm %>%
+  replace_with_na_all(condition = ~.x == "don't know")
+
+# replace "refused" with NA
+GSS2021_libmslm <- GSS2021_libmslm %>%
+  replace_with_na_all(condition = ~.x == "refused")
+
+# replace "can't choose" with NA
+GSS2021_libmslm <- GSS2021_libmslm %>%
+  replace_with_na_all(condition = ~.x == "can't choose")
+
+# only keep the rows that have complete information
+GSS2021_libmslm <- na.omit(GSS2021_libmslm)
+
+# create a version variable based on the source variable
+GSS2021_libmslm$version <- ifelse(GSS2021_libmslm$libmslm_source == "libmslm", 1, 0)
+
+# recode hispanic variable to a binary variable
+GSS2021_libmslm$hispanic[GSS2021_libmslm$hispanic != "not hispanic"] <- "hispanic"
+
+# recode race variable to use white as reference category
+GSS2021_libmslm$race <- as.factor(GSS2021_libmslm$race)
+GSS2021_libmslm$race <- relevel(GSS2021_libmslm$race, ref = "white")
+
+# recode degree variable (combining high school and associate as high school or associate, and use it as reference category)
+GSS2021_libmslm$degree[GSS2021_libmslm$degree == "associate/junior college"] <- "high school or associate"
+GSS2021_libmslm$degree[GSS2021_libmslm$degree == "high school"] <- "high school or associate"
+GSS2021_libmslm$degree <- as.factor(GSS2021_libmslm$degree)
+# reorder categories
+GSS2021_libmslm$degree <- factor(GSS2021_libmslm$degree, levels = c("less than high school", "high school or associate", "bachelor's", "graduate"))
+GSS2021_libmslm$degree <- relevel(GSS2021_libmslm$degree , ref = "high school or associate")
+
+# regroup age variable by decades
+GSS2021_libmslm$age[GSS2021_libmslm$age == "89 or older"] <- "89"
+GSS2021_libmslm$age <- as.numeric(GSS2021_libmslm$age)
+GSS2021_libmslm$age[GSS2021_libmslm$age >= 18 & GSS2021_libmslm$age < 28] <- "18-27"
+GSS2021_libmslm$age[GSS2021_libmslm$age >= 28 & GSS2021_libmslm$age < 38] <- "28-37"
+GSS2021_libmslm$age[GSS2021_libmslm$age >= 38 & GSS2021_libmslm$age < 48] <- "38-47"
+GSS2021_libmslm$age[GSS2021_libmslm$age >= 48 & GSS2021_libmslm$age < 58] <- "48-57"
+GSS2021_libmslm$age[GSS2021_libmslm$age >= 58 & GSS2021_libmslm$age < 68] <- "58-67"
+GSS2021_libmslm$age[GSS2021_libmslm$age >= 68 & GSS2021_libmslm$age < 78] <- "68-77"
+GSS2021_libmslm$age[GSS2021_libmslm$age >= 78] <- "78 and above"
+
+# recode political views variable to three categories (liberal, middle, and conservative) (use moderate as reference category)
+GSS2021_libmslm$polviews[GSS2021_libmslm$polviews == "extremely liberal" | GSS2021_libmslm$polviews == "liberal" | GSS2021_libmslm$polviews == "slightly liberal"] <- "liberal"
+GSS2021_libmslm$polviews[GSS2021_libmslm$polviews == "moderate, middle of the road"] <- "moderate"
+GSS2021_libmslm$polviews[GSS2021_libmslm$polviews == "slightly conservative" | GSS2021_libmslm$polviews == "conservative" | GSS2021_libmslm$polviews == "extremely conservative"] <- "conservative"
+GSS2021_libmslm$polviews <- as.factor(GSS2021_libmslm$polviews)
+GSS2021_libmslm$polviews <- relevel(GSS2021_libmslm$polviews, ref = "moderate")
+
+# recode religion variable to five categories (Protestants, Catholics, Jewish people, Those with no religious affiliation, Those with other religious affiliations) (use no religious affiliation as reference category)
+GSS2021_libmslm$relig[GSS2021_libmslm$relig == "protestant"] <- "Protestants"
+GSS2021_libmslm$relig[GSS2021_libmslm$relig == "catholic"] <- "Catholics"
+GSS2021_libmslm$relig[GSS2021_libmslm$relig == "jewish"] <- "Jewish people"
+GSS2021_libmslm$relig[GSS2021_libmslm$relig == "none"] <- "Those with no religious affiliation"
+GSS2021_libmslm$relig[GSS2021_libmslm$relig == "other"] <- "Those with other religious affiliations"
+GSS2021_libmslm$relig[GSS2021_libmslm$relig == "buddhism"] <- "Those with other religious affiliations"
+GSS2021_libmslm$relig[GSS2021_libmslm$relig == "hinduism"] <- "Those with other religious affiliations"
+GSS2021_libmslm$relig[GSS2021_libmslm$relig == "other eastern religions"] <- "Those with other religious affiliations"
+GSS2021_libmslm$relig[GSS2021_libmslm$relig == "muslim/islam"] <- "Those with other religious affiliations"
+GSS2021_libmslm$relig[GSS2021_libmslm$relig == "orthodox-christian"] <- "Those with other religious affiliations"
+GSS2021_libmslm$relig[GSS2021_libmslm$relig == "christian"] <- "Those with other religious affiliations"
+GSS2021_libmslm$relig[GSS2021_libmslm$relig == "native american"] <- "Those with other religious affiliations"
+GSS2021_libmslm$relig[GSS2021_libmslm$relig == "inter-nondenominational"] <- "Those with other religious affiliations"
+GSS2021_libmslm$relig <- as.factor(GSS2021_libmslm$relig)
+GSS2021_libmslm$relig <- relevel(GSS2021_libmslm$relig, ref = "Those with no religious affiliation")
+
+# use survey design for libmslm and libmslmy
+libmslm_design <- svydesign(ids = ~ vpsu, weights = ~ wtssnrps, strata = ~ vstrat, data = GSS2021_libmslm)
+
+# find the weighted proportion that supports censorship
+libmslm_wp <- svytotal(GSS2021_libmslm$libmslm_all, design = libmslm_design)
+libmslm_numob <- nrow(GSS2021_libmslm)
+libmslm_wpt <- as.data.frame(round((libmslm_wp / libmslm_numob), 3) * 100)
+# add a source variable to distinguish between data frames
+libmslm_wpt[, "source"] <- "libmslm_wp"
+# keep the weighted proportion that supports censorship and source variable
+libmslm_wpt <- libmslm_wpt[, -2]
+# display the weighted proportion that supports censorship
+knitr::kable(libmslm_wpt, format = "markdown")
+
+# build a model for libmslm and libmslmy with survey weights
+model_libmslm <- svyglm(libmslm_all ~ version + sex + hispanic + race + degree + age + polviews + relig, family = quasibinomial, design = libmslm_design)
+summary(model_libmslm)
+
+# produce formatted table
+tab_model(model_libmslm, pred.labels = c("Intercept", "Version", "Male", "Not Hispanic", "Black", "Other", "Less than high school", "Bachelor's", "Graduate", "Age 28-37", "Age 38-47", "Age 48-57", "Age 58-67", "Age 68-77", "Age 78 and above", "Political conservative", "Political liberal", "Catholics", "Jewish people", "Protestants", "Other religious affiliations"), string.ci = "CI (95%)", string.p = "P-Value")
+
+# find the mode for variable sex
+freq_libmslm_sex <- table(GSS2021_libmslm$sex)
+mode_libmslm_sex <- names(which.max(freq_libmslm_sex))
+
+# find the mode for variable hispanic
+freq_libmslm_hispanic <- table(GSS2021_libmslm$hispanic)
+mode_libmslm_hispanic <- names(which.max(freq_libmslm_hispanic))
+
+# find the mode for variable race
+freq_libmslm_race <- table(GSS2021_libmslm$race)
+mode_libmslm_race <- names(which.max(freq_libmslm_race))
+
+# find the mode for variable age
+freq_libmslm_age <- table(GSS2021_libmslm$age)
+mode_libmslm_age <- names(which.max(freq_libmslm_age))
+
+# find the mode for variable relig
+freq_libmslm_relig <- table(GSS2021_libmslm$relig)
+mode_libmslm_relig <- names(which.max(freq_libmslm_relig))
+
+# find the mode for variable version
+freq_libmslm_version <- table(GSS2021_libmslm$version)
+mode_libmslm_version <- names(which.max(freq_libmslm_version))
+
+# find predicted probabilities for the interaction between education and politics using mode of the variables
+GSS2021_libmslm_predict <- with(GSS2021_libmslm, data.frame(sex = mode_libmslm_sex, hispanic = mode_libmslm_hispanic, race = mode_libmslm_race, degree = c(rep("less than high school", 3), rep("high school or associate", 3), rep("bachelor's", 3), rep("graduate", 3)), age = mode_libmslm_age, polviews = rep(c("liberal", "moderate", "conservative"), 4), relig = mode_libmslm_relig, version = mode_libmslm_version))
+GSS2021_libmslm_predict$version <- as.numeric(GSS2021_libmslm_predict$version)
+GSS2021_libmslm_predict$predictpro <- predict(object = model_libmslm, newdata = GSS2021_libmslm_predict, type = "response")
+
+# only keep the rows of interest to produce barplot
+GSS2021_libmslm_predict_small <- GSS2021_libmslm_predict[, c("degree", "polviews", "predictpro")]
+
+# use shorter names for categories in degree
+GSS2021_libmslm_predict_small$degree[GSS2021_libmslm_predict_small$degree == "less than high school"] <- "<HS"
+GSS2021_libmslm_predict_small$degree[GSS2021_libmslm_predict_small$degree == "high school or associate"] <- "HS or Assoc"
+GSS2021_libmslm_predict_small$degree[GSS2021_libmslm_predict_small$degree == "bachelor's"] <- "BA"
+GSS2021_libmslm_predict_small$degree[GSS2021_libmslm_predict_small$degree == "graduate"] <- "Grad+"
+
+# reorder the categories for education and politics
+degree_order <- c("<HS", "HS or Assoc", "BA", "Grad+")
+polviews_order <- c("conservative", "moderate", "liberal")
+GSS2021_libmslm_predict_small$degree <- factor(GSS2021_libmslm_predict_small$degree, levels = degree_order)
+GSS2021_libmslm_predict_small$polviews <- factor(GSS2021_libmslm_predict_small$polviews, levels = polviews_order)
+GSS2021_libmslm_predict_small <- GSS2021_libmslm_predict_small[order(GSS2021_libmslm_predict_small$degree, GSS2021_libmslm_predict_small$polviews), ]
+# change the type for the variable predicted probability
+GSS2021_libmslm_predict_small$predictpro <- as.numeric(GSS2021_libmslm_predict_small$predictpro)
+
+# display the predicted probabilities
+knitr::kable(GSS2021_libmslm_predict_small, format = "markdown")
+
+# make barplot                                                      
+GSS2021_libmslm_bar <- ggplot(GSS2021_libmslm_predict_small, aes(x = degree, y = predictpro, fill = polviews)) + geom_bar(stat = "identity", position = "dodge") + scale_fill_viridis_d() + scale_y_continuous(limits = c(0, 0.7)) + labs(title = "Islamist", x = NULL, y = NULL, fill = "Political Views") + theme(plot.title = element_text(size = 10), plot.margin = unit(c(2, 2, 2, 5), "mm"))
+
+# display the barplot
+print(GSS2021_libmslm_bar)
+
+# create a subset for libmil and libmily
+GSS2021_libmil <- GSS2021[, c("libmil", "libmily", "sex", "hispanic", "race", "degree", "age", "polviews", "relig", "vpsu", "wtssnrps", "vstrat")]
+
+# create a variable libmil_all to combine libmil and libmily
+GSS2021_libmil$libmil_all <- ifelse(GSS2021_libmil$libmil == "remove" | GSS2021_libmil$libmily == "remove", 1, ifelse(GSS2021_libmil$libmil == "not remove" | GSS2021_libmil$libmily == "not remove", 0, NA))
+
+# create a source variable libmil_source
+GSS2021_libmil$libmil_source <- ifelse(GSS2021_libmil$libmil == "remove" | GSS2021_libmil$libmil == "not remove", "libmil", ifelse(GSS2021_libmil$libmily == "remove" | GSS2021_libmil$libmily == "not remove", "libmily", NA))
+
+# only keep the rows that has been applied with questions about libmil or libmily with no missing values
+GSS2021_libmil <- subset(GSS2021_libmil, libmil_source == "libmil" | libmil_source == "libmily")
+
+# keep the rows of interest
+GSS2021_libmil <- GSS2021_libmil[, c("sex", "hispanic", "race", "degree", "age", "polviews", "relig", "vpsu", "wtssnrps", "vstrat", "libmil_all", "libmil_source")]
+
+# replace "no answer" with NA
+GSS2021_libmil <- GSS2021_libmil %>%
+  replace_with_na_all(condition = ~.x == "no answer")
+
+# replace "iap" with NA
+GSS2021_libmil <- GSS2021_libmil %>%
+  replace_with_na_all(condition = ~.x == "iap")
+
+# replace "skipped on web" with NA
+GSS2021_libmil <- GSS2021_libmil %>%
+  replace_with_na_all(condition = ~.x == "skipped on web")
+
+# replace "don't know" with NA
+GSS2021_libmil <- GSS2021_libmil %>%
+  replace_with_na_all(condition = ~.x == "don't know")
+
+# replace "refused" with NA
+GSS2021_libmil <- GSS2021_libmil %>%
+  replace_with_na_all(condition = ~.x == "refused")
+
+# replace "can't choose" with NA
+GSS2021_libmil <- GSS2021_libmil %>%
+  replace_with_na_all(condition = ~.x == "can't choose")
+
+# only keep the rows that have complete information
+GSS2021_libmil <- na.omit(GSS2021_libmil)
+
+# create a version variable based on the source variable
+GSS2021_libmil$version <- ifelse(GSS2021_libmil$libmil_source == "libmil", 1, 0)
+
+# recode hispanic variable to a binary variable
+GSS2021_libmil$hispanic[GSS2021_libmil$hispanic != "not hispanic"] <- "hispanic"
+
+# recode race variable to use white as reference category
+GSS2021_libmil$race <- as.factor(GSS2021_libmil$race)
+GSS2021_libmil$race <- relevel(GSS2021_libmil$race, ref = "white")
+
+# recode degree variable (combining high school and associate as high school or associate, and use it as reference category)
+GSS2021_libmil$degree[GSS2021_libmil$degree == "associate/junior college"] <- "high school or associate"
+GSS2021_libmil$degree[GSS2021_libmil$degree == "high school"] <- "high school or associate"
+GSS2021_libmil$degree <- as.factor(GSS2021_libmil$degree)
+# reorder categories
+GSS2021_libmil$degree <- factor(GSS2021_libmil$degree, levels = c("less than high school", "high school or associate", "bachelor's", "graduate"))
+GSS2021_libmil$degree <- relevel(GSS2021_libmil$degree , ref = "high school or associate")
+
+# regroup age variable by decades
+GSS2021_libmil$age[GSS2021_libmil$age == "89 or older"] <- "89"
+GSS2021_libmil$age <- as.numeric(GSS2021_libmil$age)
+GSS2021_libmil$age[GSS2021_libmil$age >= 18 & GSS2021_libmil$age < 28] <- "18-27"
+GSS2021_libmil$age[GSS2021_libmil$age >= 28 & GSS2021_libmil$age < 38] <- "28-37"
+GSS2021_libmil$age[GSS2021_libmil$age >= 38 & GSS2021_libmil$age < 48] <- "38-47"
+GSS2021_libmil$age[GSS2021_libmil$age >= 48 & GSS2021_libmil$age < 58] <- "48-57"
+GSS2021_libmil$age[GSS2021_libmil$age >= 58 & GSS2021_libmil$age < 68] <- "58-67"
+GSS2021_libmil$age[GSS2021_libmil$age >= 68 & GSS2021_libmil$age < 78] <- "68-77"
+GSS2021_libmil$age[GSS2021_libmil$age >= 78] <- "78 and above"
+
+# recode political views variable to three categories (liberal, moderate, and conservative) (use moderate as reference category)
+GSS2021_libmil$polviews[GSS2021_libmil$polviews == "extremely liberal" | GSS2021_libmil$polviews == "liberal" | GSS2021_libmil$polviews == "slightly liberal"] <- "liberal"
+GSS2021_libmil$polviews[GSS2021_libmil$polviews == "moderate, middle of the road"] <- "moderate"
+GSS2021_libmil$polviews[GSS2021_libmil$polviews == "slightly conservative" | GSS2021_libmil$polviews == "conservative" | GSS2021_libmil$polviews == "extremely conservative"] <- "conservative"
+GSS2021_libmil$polviews <- as.factor(GSS2021_libmil$polviews)
+GSS2021_libmil$polviews <- relevel(GSS2021_libmil$polviews, ref = "moderate")
+
+# recode religion variable to five categories (Protestants, Catholics, Jewish people, Those with no religious affiliation, Those with other religious affiliations) (use no religious affiliation as reference category)
+GSS2021_libmil$relig[GSS2021_libmil$relig == "protestant"] <- "Protestants"
+GSS2021_libmil$relig[GSS2021_libmil$relig == "catholic"] <- "Catholics"
+GSS2021_libmil$relig[GSS2021_libmil$relig == "jewish"] <- "Jewish people"
+GSS2021_libmil$relig[GSS2021_libmil$relig == "none"] <- "Those with no religious affiliation"
+GSS2021_libmil$relig[GSS2021_libmil$relig == "other"] <- "Those with other religious affiliations"
+GSS2021_libmil$relig[GSS2021_libmil$relig == "buddhism"] <- "Those with other religious affiliations"
+GSS2021_libmil$relig[GSS2021_libmil$relig == "hinduism"] <- "Those with other religious affiliations"
+GSS2021_libmil$relig[GSS2021_libmil$relig == "other eastern religions"] <- "Those with other religious affiliations"
+GSS2021_libmil$relig[GSS2021_libmil$relig == "muslim/islam"] <- "Those with other religious affiliations"
+GSS2021_libmil$relig[GSS2021_libmil$relig == "orthodox-christian"] <- "Those with other religious affiliations"
+GSS2021_libmil$relig[GSS2021_libmil$relig == "christian"] <- "Those with other religious affiliations"
+GSS2021_libmil$relig[GSS2021_libmil$relig == "native american"] <- "Those with other religious affiliations"
+GSS2021_libmil$relig[GSS2021_libmil$relig == "inter-nondenominational"] <- "Those with other religious affiliations"
+GSS2021_libmil$relig <- as.factor(GSS2021_libmil$relig)
+GSS2021_libmil$relig <- relevel(GSS2021_libmil$relig, ref = "Those with no religious affiliation")
+
+# use survey design for libmil and libmily
+libmil_design <- svydesign(ids = ~ vpsu, weights = ~ wtssnrps, strata = ~ vstrat, data = GSS2021_libmil)
+
+# find the weighted proportion that supports censorship
+libmil_wp <- svytotal(GSS2021_libmil$libmil_all, design = libmil_design)
+libmil_numob <- nrow(GSS2021_libmil)
+libmil_wpt <- as.data.frame(round((libmil_wp / libmil_numob), 3) * 100)
+# add a source variable to distinguish between data frames
+libmil_wpt[, "source"] <- "libmil_wp"
+# keep the weighted proportion that supports censorship and source variable
+libmil_wpt <- libmil_wpt[, -2]
+# display the weighted proportion that supports censorship
+knitr::kable(libmil_wpt, format = "markdown")
+
+# build a model for libmil and libmily with survey weights
+model_libmil <- svyglm(libmil_all ~ version + sex + hispanic + race + degree + age + polviews + relig, family = quasibinomial, design = libmil_design)
+summary(model_libmil)
+
+# produce formatted table
+tab_model(model_libmil, pred.labels = c("Intercept", "Version", "Male", "Not Hispanic", "Black", "Other", "Less than high school", "Bachelor's", "Graduate", "Age 28-37", "Age 38-47", "Age 48-57", "Age 58-67", "Age 68-77", "Age 78 and above", "Political conservative", "Political liberal", "Catholics", "Jewish people", "Protestants", "Other religious affiliations"), string.ci = "CI (95%)", string.p = "P-Value")
+
+# find the mode for variable sex
+freq_libmil_sex <- table(GSS2021_libmil$sex)
+mode_libmil_sex <- names(which.max(freq_libmil_sex))
+
+# find the mode for variable hispanic
+freq_libmil_hispanic <- table(GSS2021_libmil$hispanic)
+mode_libmil_hispanic <- names(which.max(freq_libmil_hispanic))
+
+# find the mode for variable race
+freq_libmil_race <- table(GSS2021_libmil$race)
+mode_libmil_race <- names(which.max(freq_libmil_race))
+
+# find the mode for variable age
+freq_libmil_age <- table(GSS2021_libmil$age)
+mode_libmil_age <- names(which.max(freq_libmil_age))
+
+# find the mode for variable relig
+freq_libmil_relig <- table(GSS2021_libmil$relig)
+mode_libmil_relig <- names(which.max(freq_libmil_relig))
+
+# find the mode for variable version
+freq_libmil_version <- table(GSS2021_libmil$version)
+mode_libmil_version <- names(which.max(freq_libmil_version))
+
+# find predicted probabilities for the interaction between education and politics using mode of the variables
+GSS2021_libmil_predict <- with(GSS2021_libmil, data.frame(sex = mode_libmil_sex, hispanic = mode_libmil_hispanic, race = mode_libmil_race, degree = c(rep("less than high school", 3), rep("high school or associate", 3), rep("bachelor's", 3), rep("graduate", 3)), age = mode_libmil_age, polviews = rep(c("liberal", "moderate", "conservative"), 4), relig = mode_libmil_relig, version = mode_libmil_version))
+GSS2021_libmil_predict$version <- as.numeric(GSS2021_libmil_predict$version)
+GSS2021_libmil_predict$predictpro <- predict(object = model_libmil, newdata = GSS2021_libmil_predict, type = "response")
+
+# only keep the rows of interest to produce barplot
+GSS2021_libmil_predict_small <- GSS2021_libmil_predict[, c("degree", "polviews", "predictpro")]
+
+# use shorter names for categories in degree
+GSS2021_libmil_predict_small$degree[GSS2021_libmil_predict_small$degree == "less than high school"] <- "<HS"
+GSS2021_libmil_predict_small$degree[GSS2021_libmil_predict_small$degree == "high school or associate"] <- "HS or Assoc"
+GSS2021_libmil_predict_small$degree[GSS2021_libmil_predict_small$degree == "bachelor's"] <- "BA"
+GSS2021_libmil_predict_small$degree[GSS2021_libmil_predict_small$degree == "graduate"] <- "Grad+"
+
+# reorder the categories for education and politics
+degree_order <- c("<HS", "HS or Assoc", "BA", "Grad+")
+polviews_order <- c("conservative", "moderate", "liberal")
+GSS2021_libmil_predict_small$degree <- factor(GSS2021_libmil_predict_small$degree, levels = degree_order)
+GSS2021_libmil_predict_small$polviews <- factor(GSS2021_libmil_predict_small$polviews, levels = polviews_order)
+GSS2021_libmil_predict_small <- GSS2021_libmil_predict_small[order(GSS2021_libmil_predict_small$degree, GSS2021_libmil_predict_small$polviews), ]
+# change the type for the variable predicted probability
+GSS2021_libmil_predict_small$predictpro <- as.numeric(GSS2021_libmil_predict_small$predictpro)
+
+# display the predicted probabilities
+knitr::kable(GSS2021_libmil_predict_small, format = "markdown")
+
+# make barplot                                                       
+GSS2021_libmil_bar <- ggplot(GSS2021_libmil_predict_small, aes(x = degree, y = predictpro, fill = polviews)) + geom_bar(stat = "identity", position = "dodge") + scale_fill_viridis_d() + scale_y_continuous(limits = c(0, 0.7)) + labs(title = "Militarist", x = NULL, y = NULL, fill = "Political Views") + theme(plot.title = element_text(size = 10), plot.margin = unit(c(2, 2, 2, 5), "mm"))
+
+# display the barplot
+print(GSS2021_libmil_bar)
+
+# create a subset for libath and libathy
+GSS2021_libath <- GSS2021[, c("libath", "libathy", "sex", "hispanic", "race", "degree", "age", "polviews", "relig", "vpsu", "wtssnrps", "vstrat")]
+
+# create a variable libath_all to combine libath and libathy
+GSS2021_libath$libath_all <- ifelse(GSS2021_libath$libath == "remove" | GSS2021_libath$libathy == "remove", 1, ifelse(GSS2021_libath$libath == "not remove" | GSS2021_libath$libathy == "not remove", 0, NA))
+
+# create a source variable libath_source
+GSS2021_libath$libath_source <- ifelse(GSS2021_libath$libath == "remove" | GSS2021_libath$libath == "not remove", "libath", ifelse(GSS2021_libath$libathy == "remove" | GSS2021_libath$libathy == "not remove", "libathy", NA))
+
+# only keep the rows that has been applied with questions about libath or libathy with no missing values
+GSS2021_libath <- subset(GSS2021_libath, libath_source == "libath" | libath_source == "libathy")
+
+# keep the rows of interest
+GSS2021_libath <- GSS2021_libath[, c("sex", "hispanic", "race", "degree", "age", "polviews", "relig", "vpsu", "wtssnrps", "vstrat", "libath_all", "libath_source")]
+
+# replace "no answer" with NA
+GSS2021_libath <- GSS2021_libath %>%
+  replace_with_na_all(condition = ~.x == "no answer")
+
+# replace "iap" with NA
+GSS2021_libath <- GSS2021_libath %>%
+  replace_with_na_all(condition = ~.x == "iap")
+
+# replace "skipped on web" with NA
+GSS2021_libath <- GSS2021_libath %>%
+  replace_with_na_all(condition = ~.x == "skipped on web")
+
+# replace "don't know" with NA
+GSS2021_libath <- GSS2021_libath %>%
+  replace_with_na_all(condition = ~.x == "don't know")
+
+# replace "refused" with NA
+GSS2021_libath <- GSS2021_libath %>%
+  replace_with_na_all(condition = ~.x == "refused")
+
+# replace "can't choose" with NA
+GSS2021_libath <- GSS2021_libath %>%
+  replace_with_na_all(condition = ~.x == "can't choose")
+
+# only keep the rows that have complete information
+GSS2021_libath <- na.omit(GSS2021_libath)
+
+# create a version variable based on the source variable
+GSS2021_libath$version <- ifelse(GSS2021_libath$libath_source == "libath", 1, 0)
+
+# recode hispanic variable to a binary variable
+GSS2021_libath$hispanic[GSS2021_libath$hispanic != "not hispanic"] <- "hispanic"
+
+# recode race variable to use white as reference category
+GSS2021_libath$race <- as.factor(GSS2021_libath$race)
+GSS2021_libath$race <- relevel(GSS2021_libath$race, ref = "white")
+
+# recode degree variable (combining high school and associate as high school or associate, and use it as reference category)
+GSS2021_libath$degree[GSS2021_libath$degree == "associate/junior college"] <- "high school or associate"
+GSS2021_libath$degree[GSS2021_libath$degree == "high school"] <- "high school or associate"
+GSS2021_libath$degree <- as.factor(GSS2021_libath$degree)
+# reorder categories
+GSS2021_libath$degree <- factor(GSS2021_libath$degree, levels = c("less than high school", "high school or associate", "bachelor's", "graduate"))
+GSS2021_libath$degree <- relevel(GSS2021_libath$degree , ref = "high school or associate")
+
+# regroup age variable by decades
+GSS2021_libath$age[GSS2021_libath$age == "89 or older"] <- "89"
+GSS2021_libath$age <- as.numeric(GSS2021_libath$age)
+GSS2021_libath$age[GSS2021_libath$age >= 18 & GSS2021_libath$age < 28] <- "18-27"
+GSS2021_libath$age[GSS2021_libath$age >= 28 & GSS2021_libath$age < 38] <- "28-37"
+GSS2021_libath$age[GSS2021_libath$age >= 38 & GSS2021_libath$age < 48] <- "38-47"
+GSS2021_libath$age[GSS2021_libath$age >= 48 & GSS2021_libath$age < 58] <- "48-57"
+GSS2021_libath$age[GSS2021_libath$age >= 58 & GSS2021_libath$age < 68] <- "58-67"
+GSS2021_libath$age[GSS2021_libath$age >= 68 & GSS2021_libath$age < 78] <- "68-77"
+GSS2021_libath$age[GSS2021_libath$age >= 78] <- "78 and above"
+
+# recode political views variable to three categories (liberal, moderate, and conservative) (use moderate as reference category)
+GSS2021_libath$polviews[GSS2021_libath$polviews == "extremely liberal" | GSS2021_libath$polviews == "liberal" | GSS2021_libath$polviews == "slightly liberal"] <- "liberal"
+GSS2021_libath$polviews[GSS2021_libath$polviews == "moderate, middle of the road"] <- "moderate"
+GSS2021_libath$polviews[GSS2021_libath$polviews == "slightly conservative" | GSS2021_libath$polviews == "conservative" | GSS2021_libath$polviews == "extremely conservative"] <- "conservative"
+GSS2021_libath$polviews <- as.factor(GSS2021_libath$polviews)
+GSS2021_libath$polviews <- relevel(GSS2021_libath$polviews, ref = "moderate")
+
+# recode religion variable to five categories (Protestants, Catholics, Jewish people, Those with no religious affiliation, Those with other religious affiliations) (use no religious affiliation as reference category)
+GSS2021_libath$relig[GSS2021_libath$relig == "protestant"] <- "Protestants"
+GSS2021_libath$relig[GSS2021_libath$relig == "catholic"] <- "Catholics"
+GSS2021_libath$relig[GSS2021_libath$relig == "jewish"] <- "Jewish people"
+GSS2021_libath$relig[GSS2021_libath$relig == "none"] <- "Those with no religious affiliation"
+GSS2021_libath$relig[GSS2021_libath$relig == "other"] <- "Those with other religious affiliations"
+GSS2021_libath$relig[GSS2021_libath$relig == "buddhism"] <- "Those with other religious affiliations"
+GSS2021_libath$relig[GSS2021_libath$relig == "hinduism"] <- "Those with other religious affiliations"
+GSS2021_libath$relig[GSS2021_libath$relig == "other eastern religions"] <- "Those with other religious affiliations"
+GSS2021_libath$relig[GSS2021_libath$relig == "muslim/islam"] <- "Those with other religious affiliations"
+GSS2021_libath$relig[GSS2021_libath$relig == "orthodox-christian"] <- "Those with other religious affiliations"
+GSS2021_libath$relig[GSS2021_libath$relig == "christian"] <- "Those with other religious affiliations"
+GSS2021_libath$relig[GSS2021_libath$relig == "native american"] <- "Those with other religious affiliations"
+GSS2021_libath$relig[GSS2021_libath$relig == "inter-nondenominational"] <- "Those with other religious affiliations"
+GSS2021_libath$relig <- as.factor(GSS2021_libath$relig)
+GSS2021_libath$relig <- relevel(GSS2021_libath$relig, ref = "Those with no religious affiliation")
+
+# use survey design for libath and libathy
+libath_design <- svydesign(ids = ~ vpsu, weights = ~ wtssnrps, strata = ~ vstrat, data = GSS2021_libath)
+
+# find the weighted proportion that supports censorship
+libath_wp <- svytotal(GSS2021_libath$libath_all, design = libath_design)
+libath_numob <- nrow(GSS2021_libath)
+libath_wpt <- as.data.frame(round((libath_wp / libath_numob), 3) * 100)
+# add a source variable to distinguish between data frames
+libath_wpt[, "source"] <- "libath_wp"
+# keep the weighted proportion that supports censorship and source variable
+libath_wpt <- libath_wpt[, -2]
+# display the weighted proportion that supports censorship
+knitr::kable(libath_wpt, format = "markdown")
+
+# build a model for libath and libathy with survey weights
+model_libath <- svyglm(libath_all ~ version + sex + hispanic + race + degree + age + polviews + relig, family = quasibinomial, design = libath_design)
+summary(model_libath)
+
+# produce formatted table
+tab_model(model_libath, pred.labels = c("Intercept", "Version", "Male", "Not Hispanic", "Black", "Other", "Less than high school", "Bachelor's", "Graduate", "Age 28-37", "Age 38-47", "Age 48-57", "Age 58-67", "Age 68-77", "Age 78 and above", "Political conservative", "Political liberal", "Catholics", "Jewish people", "Protestants", "Other religious affiliations"), string.ci = "CI (95%)", string.p = "P-Value")
+
+# find the mode for variable sex
+freq_libath_sex <- table(GSS2021_libath$sex)
+mode_libath_sex <- names(which.max(freq_libath_sex))
+
+# find the mode for variable hispanic
+freq_libath_hispanic <- table(GSS2021_libath$hispanic)
+mode_libath_hispanic <- names(which.max(freq_libath_hispanic))
+
+# find the mode for variable race
+freq_libath_race <- table(GSS2021_libath$race)
+mode_libath_race <- names(which.max(freq_libath_race))
+
+# find the mode for variable age
+freq_libath_age <- table(GSS2021_libath$age)
+mode_libath_age <- names(which.max(freq_libath_age))
+
+# find the mode for variable relig
+freq_libath_relig <- table(GSS2021_libath$relig)
+mode_libath_relig <- names(which.max(freq_libath_relig))
+
+# find the mode for variable version
+freq_libath_version <- table(GSS2021_libath$version)
+mode_libath_version <- names(which.max(freq_libath_version))
+
+# find predicted probabilities for the interaction between education and politics using mode of the variables
+GSS2021_libath_predict <- with(GSS2021_libath, data.frame(sex = mode_libath_sex, hispanic = mode_libath_hispanic, race = mode_libath_race, degree = c(rep("less than high school", 3), rep("high school or associate", 3), rep("bachelor's", 3), rep("graduate", 3)), age = mode_libath_age, polviews = rep(c("liberal", "moderate", "conservative"), 4), relig = mode_libath_relig, version = mode_libath_version))
+GSS2021_libath_predict$version <- as.numeric(GSS2021_libath_predict$version)
+GSS2021_libath_predict$predictpro <- predict(object = model_libath, newdata = GSS2021_libath_predict, type = "response")
+
+# only keep the rows of interest to produce barplot
+GSS2021_libath_predict_small <- GSS2021_libath_predict[, c("degree", "polviews", "predictpro")]
+
+# use shorter names for categories in degree
+GSS2021_libath_predict_small$degree[GSS2021_libath_predict_small$degree == "less than high school"] <- "<HS"
+GSS2021_libath_predict_small$degree[GSS2021_libath_predict_small$degree == "high school or associate"] <- "HS or Assoc"
+GSS2021_libath_predict_small$degree[GSS2021_libath_predict_small$degree == "bachelor's"] <- "BA"
+GSS2021_libath_predict_small$degree[GSS2021_libath_predict_small$degree == "graduate"] <- "Grad+"
+
+# reorder the categories for education and politics
+degree_order <- c("<HS", "HS or Assoc", "BA", "Grad+")
+polviews_order <- c("conservative", "moderate", "liberal")
+GSS2021_libath_predict_small$degree <- factor(GSS2021_libath_predict_small$degree, levels = degree_order)
+GSS2021_libath_predict_small$polviews <- factor(GSS2021_libath_predict_small$polviews, levels = polviews_order)
+GSS2021_libath_predict_small <- GSS2021_libath_predict_small[order(GSS2021_libath_predict_small$degree, GSS2021_libath_predict_small$polviews), ]
+# change the type for the variable predicted probability
+GSS2021_libath_predict_small$predictpro <- as.numeric(GSS2021_libath_predict_small$predictpro)
+
+# display the predicted probabilities
+knitr::kable(GSS2021_libath_predict_small, format = "markdown")
+
+# make barplot                                                       
+GSS2021_libath_bar <- ggplot(GSS2021_libath_predict_small, aes(x = degree, y = predictpro, fill = polviews)) + geom_bar(stat = "identity", position = "dodge") + scale_fill_viridis_d() + scale_y_continuous(limits = c(0, 0.7)) + labs(title = "Atheist", x = NULL, y = NULL, fill = "Political Views") + theme(plot.title = element_text(size = 10), plot.margin = unit(c(2, 2, 2, 5), "mm"))
+
+# display the barplot
+print(GSS2021_libath_bar)
+
+# get the legend
+legend <- get_legend(GSS2021_libhomo_bar)
+
+# remove the legend from all plots
+GSS2021_libhomo_bar <- GSS2021_libhomo_bar + theme(legend.position = "none")
+GSS2021_librac_bar <- GSS2021_librac_bar + theme(legend.position = "none")
+GSS2021_libcom_bar <- GSS2021_libcom_bar + theme(legend.position = "none")
+GSS2021_libmslm_bar <- GSS2021_libmslm_bar + theme(legend.position = "none")
+GSS2021_libmil_bar <- GSS2021_libmil_bar + theme(legend.position = "none")
+GSS2021_libath_bar <- GSS2021_libath_bar + theme(legend.position = "none")
+
+# generate x axis label, y axis label, and caption
+xlabel <- ggdraw() + draw_label("Education", size = 12)
+ylabel <- ggdraw() + draw_label("Predicted Probability", angle = 90, size = 12)
+caption <- ggdraw() + draw_label(" Figure 1. This figure shows the predicted probability of support for removing specific types of controversial books\n from respondents’ local public library. Data are from the 2021 US General Social Survey (GSS), a nationally re-\n presentative online survey of non-institutionalized English- and Spanish-speaking adults in the United States. The\n predicted probabilities shown here result from quasibinomial regression models, with controls for respondents’\n gender, ethnoracial identity, age, and religious affiliation, and survey question version. ", size = 10, hjust = 0, x = 0)
+
+# combine the plots in a grid with a common legend, and add the x axis label 
+plot_xlabel <- ggdraw(plot_grid(plot_grid(GSS2021_libhomo_bar, GSS2021_librac_bar, GSS2021_libcom_bar, GSS2021_libmslm_bar, GSS2021_libmil_bar, GSS2021_libath_bar, ncol = 2, align='hv', axis = 'tb'), plot_grid(legend, ncol = 1), plot_grid(xlabel, ncol = 1), rel_widths = c(1, 0.2), rel_heights = c(1, 0.05)))
+
+# add the y axis label 
+plot_ylabel <- plot_grid(ylabel, plot_xlabel, rel_widths = c(0.03, 1))
+
+# add the caption
+plot_caption <- plot_grid(plot_ylabel, caption, ncol=1, rel_heights = c(1, 0.25))
+print(plot_caption)
